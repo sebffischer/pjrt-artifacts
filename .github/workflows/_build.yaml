@@ -213,3 +213,63 @@ jobs:
         with:
           name: pjrt-${{ matrix.pjrt.target }}_${{ matrix.pjrt.platform }}.tar.gz
           path: pjrt-${{ matrix.pjrt.target }}_${{ matrix.pjrt.platform }}.tar.gz
+
+  # Windows is built like JAX builds jaxlib locally on Windows: a local
+  # clang-cl and XLA's own bazelrc instead of the hermetic toolchain and
+  # bazelrc of the jobs above. It applies only openxla/patches/windows and
+  # adds openxla/bazelrc/windows/xla_configure.bazelrc.
+  pjrt-artifacts-windows:
+    runs-on: windows-latest
+    timeout-minutes: 360
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: "Checking out repository"
+        uses: actions/checkout@v4
+        with:
+          path: "pjrt-artifacts"
+
+      - name: "Checking out openxla repository"
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.xla_commit }}
+          repository: openxla/xla
+          path: "xla"
+
+      - name: Install LLVM
+        run: choco install llvm --version=22.1.8 --allow-downgrade --force -y
+
+      - name: Apply patches to openxla
+        working-directory: ./xla
+        run: |
+          echo ::notice::Applying patches to openxla $(git rev-parse HEAD)
+          for patch in ../pjrt-artifacts/openxla/patches/windows/*.patch; do
+              echo "Applying patch $patch"
+              git apply "$patch"
+          done
+
+      - name: "Setup bazelrc for openxla"
+        run: cp pjrt-artifacts/openxla/bazelrc/windows/xla_configure.bazelrc xla/
+
+      - name: "Build cpu windows-amd64"
+        working-directory: ./xla
+        env:
+          BAZEL_EXTRA_ARGS: ${{ inputs.bazel_extra_args || '' }}
+        run: |
+          bazel build ${{ env.BAZEL_EXTRA_ARGS }} //xla/pjrt/c:pjrt_c_api_cpu_plugin.so
+
+      - name: Check that the plugin exports GetPjrtApi
+        run: |
+          "C:/Program Files/LLVM/bin/llvm-readobj.exe" --coff-exports xla/bazel-bin/xla/pjrt/c/pjrt_c_api_cpu_plugin.so | grep -w GetPjrtApi
+
+      - name: Create compressed cpu windows-amd64 release file
+        run: |
+          cp xla/bazel-bin/xla/pjrt/c/pjrt_c_api_cpu_plugin.so pjrt_cpu.dll
+          tar -czf pjrt-cpu_windows-amd64.tar.gz pjrt_cpu.dll
+
+      - name: Upload cpu windows-amd64 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pjrt-cpu_windows-amd64.tar.gz
+          path: pjrt-cpu_windows-amd64.tar.gz

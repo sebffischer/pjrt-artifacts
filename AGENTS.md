@@ -6,7 +6,7 @@ When CI breaks because upstream changes invalidate our pinned commit or patches,
 ## 1. Workspace basics
 - Use SSH for GitHub access (`git@github.com:zml/pjrt-artifacts.git`).
 - Workflow lives in `.github/workflows/_build.yaml`; default commit pins must always track a revision verified locally.
-- Custom patches live under `openxla/patches/{upstream,rocm}` and are applied before every build.
+- Custom patches live under `openxla/patches/{upstream,rocm,windows}` and are applied before every build. `upstream` is applied to the CPU builds (Linux, macOS), `windows` alone to the Windows CPU build, which uses a local clang-cl toolchain (like JAX's local Windows build), XLA's own bazelrc and `openxla/bazelrc/windows/xla_configure.bazelrc`.
 
 ## 2. Checking and Fixing nightly builds
 Nightly runs are defined in `.github/workflows/nightly.yaml`. Always read that file first—its matrix and `openxla/commits.env` specify the authoritative pins (`XLA_COMMIT`, `CUDA_XLA_COMMIT`, `ROCM_XLA_COMMIT`, …). When fixing nightly failures, validate the relevant repos at those exact SHAs unless the task explicitly asks to move them forward.
