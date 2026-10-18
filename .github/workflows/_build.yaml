@@ -238,7 +238,9 @@ jobs:
           path: "xla"
 
       - name: Install LLVM
-        run: choco install llvm --version=22.1.8 --allow-downgrade --force -y
+        # The runner image's LLVM. 22.1.8 fails Bazel's include check on
+        # clang's builtin headers (lib/clang/22/include).
+        run: choco install llvm --version=20.1.8 --allow-downgrade -y
 
       - name: Apply patches to openxla
         working-directory: ./xla
