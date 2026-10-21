@@ -1,23 +1,21 @@
-From 3554957caafede312b2252c55b18d711bcb67e48 Mon Sep 17 00:00:00 2001
+From 1066a905b335cb67b2298c0d59f57cb23ef10c26 Mon Sep 17 00:00:00 2001
 From: Louis Lechevalier <louis@zml.ai>
 Date: Tue, 28 Jul 2026 11:06:12 +0200
-Subject: [PATCH 9/9] Reduce allocations during PJRT execution preparation
+Subject: [PATCH 4/4] Reduce allocations during PJRT execution preparation
 
 ---
- xla/pjrt/common_pjrt_client.cc             | 36 +++++++++++++++++++---
+ xla/pjrt/common_pjrt_client.cc             | 32 ++++++++++++++++++----
  xla/pjrt/se/pjrt_stream_executor_client.cc |  6 ++--
- 2 files changed, 35 insertions(+), 7 deletions(-)
+ 2 files changed, 31 insertions(+), 7 deletions(-)
 
 diff --git a/xla/pjrt/common_pjrt_client.cc b/xla/pjrt/common_pjrt_client.cc
-index 05550123ea..07c65afb92 100644
+index d5f703ec..221574a0 100644
 --- a/xla/pjrt/common_pjrt_client.cc
 +++ b/xla/pjrt/common_pjrt_client.cc
-@@ -91,6 +91,33 @@ limitations under the License.
+@@ -220,6 +220,29 @@ absl::Status ValidateStridedGatherBounds(const StridedGather& gather,
+   return absl::OkStatus();
+ }
  
- namespace xla {
- 
-+namespace {
-+
 +class SmallEventDeduplicator {
 + public:
 +  bool Insert(void* event) {
@@ -41,12 +39,10 @@ index 05550123ea..07c65afb92 100644
 +  std::optional<absl::flat_hash_set<void*>> large_seen_;
 +};
 +
-+}  // namespace
-+
- void CommonPjRtClient::TrackFuture(PjRtMemorySpace* memory_space,
-                                    absl::string_view debug_info,
-                                    const Future<>& future) {}
-@@ -1102,8 +1129,8 @@ absl::Status CommonPjRtClient::PrepareArguments(
+ }  // namespace
+ 
+ CommonPjRtClient::CommonPjRtClient()
+@@ -2250,8 +2273,8 @@ absl::Status CommonPjRtClient::PrepareArguments(
      PjRtDevice* device, int replica, int partition,
      absl::Span<const Shape> parameter_device_shapes, bool& is_error,
      bool allow_fallback_for_donation) {
@@ -57,7 +53,7 @@ index 05550123ea..07c65afb92 100644
    if (argument_handles.size() != parameter_device_shapes.size()) {
      return InvalidArgument(
          "Execution supplied %d arguments but compiled program expected %d",
-@@ -1196,8 +1223,7 @@ absl::Status CommonPjRtClient::PrepareArguments(
+@@ -2363,8 +2386,7 @@ absl::Status CommonPjRtClient::PrepareArguments(
                      is_error = true;
                      ABSL_FALLTHROUGH_INTENDED;
                    case PJRT_DeviceEvent_State_Unavailable:
@@ -67,7 +63,7 @@ index 05550123ea..07c65afb92 100644
                        extra_deps.push_back(ev);
                      }
                      break;
-@@ -1291,7 +1317,7 @@ absl::Status CommonPjRtClient::PrepareArguments(
+@@ -2458,7 +2480,7 @@ absl::Status CommonPjRtClient::PrepareArguments(
            if (ev.ptr().state() == PJRT_DeviceEvent_State_Ready) {
              continue;
            }
@@ -77,10 +73,10 @@ index 05550123ea..07c65afb92 100644
            }
          }
 diff --git a/xla/pjrt/se/pjrt_stream_executor_client.cc b/xla/pjrt/se/pjrt_stream_executor_client.cc
-index 49fb578651..76fd8c7154 100644
+index a7a6f5d6..7009718d 100644
 --- a/xla/pjrt/se/pjrt_stream_executor_client.cc
 +++ b/xla/pjrt/se/pjrt_stream_executor_client.cc
-@@ -1619,8 +1619,10 @@ PjRtStreamExecutorRawLoadedExecutable::Execute(
+@@ -1373,8 +1373,10 @@ PjRtStreamExecutorRawLoadedExecutable::Execute(
         compute_reservation = std::move(compute_reservation),
         send_device_memory = std::move(send_device_memory),
         recv_device_memory = std::move(recv_device_memory),
@@ -90,9 +86,9 @@ index 49fb578651..76fd8c7154 100644
 +                                                         inputs.end()),
 +       results = absl::InlinedVector<PjRtRawBufferRef, 8>(results.begin(),
 +                                                          results.end()),
-        device_ordinal, executable = executable_,
-        execution_profile = options.execution_profile, is_predetermined_error,
-        parameter_is_tupled_arguments = parameter_is_tupled_arguments_,
+        executable = executable_, execution_profile = options.execution_profile,
+        parameter_is_tupled_arguments =
+            compile_options.parameter_is_tupled_arguments,
 -- 
-2.43.0
+2.25.1
 
